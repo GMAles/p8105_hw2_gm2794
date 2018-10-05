@@ -1,0 +1,216 @@
+---
+title: "p8105_hw2_p2794"
+author: "GMA"
+date: "4 de octubre de 2018"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Needed libraries
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(readr)
+library(janitor)
+```
+
+# Problem 1: NY Transit data
+
+Read and clean the data -> Using clean_names function from the janitor library
+
+```{r}
+nyt_data <- read_csv('./data/NYC_Transit_Subway_Entrance_And_Exit_Data.csv') 
+    nyt_data_clean <- nyt_data %>%
+    janitor::clean_names()
+```
+
+Select certain variables -> Using select function
+
+```{r}
+nyt_data_clean %>%
+    select(line:entry,
+           vending,
+           ada)
+```
+
+Convert "entry" from character to logical -> Using ifelse function
+
+```{r}
+nyt_data_clean$entry <- ifelse(nyt_data_clean$entry == "YES", TRUE, FALSE)
+```
+
+How many distinct stations are there? 465
+
+```{r}
+nrow(distinct(nyt_data_clean, line, station_name))
+```
+
+How many stations are ADA compliant? 84
+
+```{r}
+nrow(filter(distinct(nyt_data_clean, line, station_name, ada), ada == TRUE))
+```
+
+What proportion of station entrances and exits without vending allow entrance? 0.148
+
+```{r}
+nrow(filter(nyt_data_clean, vending == "NO" & entry == TRUE)) / 465
+```
+
+Reformat data so that route number and route name are distinct variables
+
+```{r}
+nyt_data_clean_ref = 
+    gather(nyt_data_clean, key = "route_number", value = "route_name", route1:route11)
+```
+
+How many stations serve the A train, and how many are ADA compliant? 60 stations serve the A line; 17 of these 60 are ADA compliant
+
+```{r}
+nrow(
+  filter(nyt_data_clean_ref, route_name == "A") %>%
+  distinct(station_name, line)
+  )
+nrow(
+  filter(nyt_data_clean_ref, route_name == "A", ada == TRUE) %>%
+  distinct(station_name, line)
+  )
+```
+
+# Problem 2:
+
+Mr. Trash Wheel: read and clean the data, specifying sheet, omitting columns containing notes and rows not containing dumpster-specific data, rounds the number of sports balls to the nearest integer and converts the result to an integer variable (using as.integer)
+
+```{r}
+mtw_data <- read_excel('./data/HealthyHarborWaterWheelTotals2018-7-28.xlsx', 
+      sheet = "Mr. Trash Wheel",
+      range = cell_cols("A:N"))
+
+mtwclean_data <- mtw_data %>%
+      janitor::clean_names() %>%
+      filter(!is.na(dumpster)) %>% 
+      mutate(sports_ball = as.integer(round(sports_balls)))
+```
+
+Precipitation data: read and clean
+
+```{r}
+p16_data <- 
+  read_excel('./data/HealthyHarborWaterWheelTotals2017-3.xlsx',
+      sheet = "2016 Precipitation",
+      range = "A2:B14") %>%
+  janitor::clean_names() %>%
+  mutate(year = 2016)
+
+p17_data <- 
+  read_excel('./data/HealthyHarborWaterWheelTotals2017-3.xlsx',
+      sheet = "2017 Precipitation",
+      range = "A2:B10") %>%
+  janitor::clean_names() %>%
+  mutate(year = 2017)
+```
+
+Combine both datasets and convert month to a character variable
+
+```{r}
+p1617_data <- p16_data %>%
+    bind_rows(p17_data) %>%
+    mutate(month = month.name[month])
+```
+
+Paragraph: in this problem, I have worked with two different datasets. 
+`r mtw_data`includes `r ncol(mtw_data)`columns and `r nrow(mtw_data)`rows. 
+Important variables refer to objects found in dumpsters, like polystyrene 
+or cigarrette_butts. 
+Precipitation data refers to 2016 and 2017, and has `r nrow(p1617_data)`observations. Total precipitation in 2017 was `r sum(p17_data$precipitation)`and median number 
+of sport balls in dumpsters in 2016 was
+`r median(mtwclean_data %>% filter(year == "2016") %>% pull(sport_balls)). 
+
+# Problem 3: 
+
+Read the data, loading it from github
+
+```{r}
+devtools::install_github("p8105/p8105.datasets")
+    library(p8105.datasets)
+    b_data <- p8105.datasets::brfss_smart2010 %>%
+```
+
+Clean the data, use appropiate variable names (in this case I will rename the variables that encode location), focus on the Overall Health topic
+
+```{r}
+b_data <- p8105.datasets::brfss_smart2010 %>%
+      janitor::clean_names() %>%
+      rename(location1 = locationabbr, location2 = locationdesc) %>%
+      filter(topic == "Overall Health") %>%
+      select(-(class:question), -sample_size, -(confidence_limit_low:geo_location))  
+```
+
+Structure data so that Response values are column names (create dummy variables)
+
+```{r}
+bspread_data <- b_data %>%
+  spread(key = response, value = data_value) %>% 
+  janitor::clean_names()
+```
+
+Create a variable showing the proportion of Excellent or Very Good responses
+
+```{r}
+bspread_data %>%
+  mutate(exc_vgood = excellent + very_good)
+```
+
+Do or answer the following:
+How many locations does it include? `r b_data %>% distinct(location1) %>% count()`  states and `r b_data %>% distinct(location2) %>% count()` smaller locales; hence it includes 404 unique locations.
+Is every state represented? Yes
+What state is observed the most? NJ with 730 observations
+
+```{r}
+b_data %>%
+  distinct(location1) %>%
+  count()
+
+b_data %>%
+  distinct(location2) %>%
+  count()
+
+table(b_data$location1)
+```
+
+In 2002, what is the median of the "Excellent" response value? `r bspread2002_data <- bspread_data %>% filter(year == 2002) %>% median(bspread2002_data$excellent, na.rm = TRUE)`
+
+```{r}
+bspread2002_data <- bspread_data %>%
+  filter(year == 2002) %>%
+  median(bspread2002_data$excellent, na.rm = TRUE)
+```
+
+Plot a histogram of Excellent response values in year 2002
+
+```{r}
+bspread_data %>% 
+  filter(year == "2002") %>% 
+  ggplot(aes(x = excellent)) + 
+  geom_histogram(fill = "red", alpha = 0.5) + 
+  labs(x = "Excellent", 
+       y = "No", 
+       caption = "Question 3 Histogram") + 
+  theme_dark()
+```
+
+Plot a scatterplot showing proportion of Excellent response values in New York County and Queens County in each year from 2002 to 2010
+
+```{r}
+bspread_data %>% 
+  filter(location2 %in% c("NY - New York County", "NY - Queens County")) %>% 
+  mutate(exc_prop = excellent / (excellent + fair + good + poor + very_good)) %>% 
+  ggplot(aes(x = year, y = exc_prop, color = location2)) + 
+  geom_point(aes(color = location2))
+  theme_dark() 
+```
+
